@@ -20,6 +20,5 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % "1.11.8",
   "com.softwaremill.sttp.tapir" %% "tapir-files" % "1.11.8",
   "co.fs2" %% "fs2-core" % "3.11.0",
-  "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % "1.11.8",
-  "io.circe" %% "circe-generic" % ""
+  "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % "1.11.8"
 )
