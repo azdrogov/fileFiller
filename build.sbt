@@ -4,6 +4,7 @@ version := "0.1"
 
 scalaVersion := "2.13.15"
 
+Compile / mainClass := Some("ServerMain")
 
 val http4sVersion = "0.23.29"
 val http4sBlaze = "0.23.17"
