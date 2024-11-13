@@ -23,3 +23,17 @@ libraryDependencies ++= Seq(
   "co.fs2" %% "fs2-core" % "3.11.0",
   "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % "1.11.8"
 )
+
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) =>
+    xs map {_.toLowerCase} match {
+      case ("manifest.mf" :: Nil) | ("index.list" :: Nil) | ("dependencies" :: Nil) =>
+        MergeStrategy.discard
+      case _ => MergeStrategy.first
+    }
+  case PathList("reference.conf") => MergeStrategy.concat
+  case PathList("application.conf") => MergeStrategy.concat
+  case PathList("META-INF", "spring.tooling") => MergeStrategy.discard
+  case "module-info.class" => MergeStrategy.discard
+  case _ => MergeStrategy.first
+}

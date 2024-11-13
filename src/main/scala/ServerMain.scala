@@ -112,7 +112,7 @@ object ServerMain extends IOApp {
     val httpApp = (countCharactersRoutes <+> fileRout <+> loveRoute <+> fileRoutes <+> swaggerRoutes).orNotFound
 
     BlazeServerBuilder[IO]
-      .bindHttp(8080, "localhost")
+      .bindHttp(9000, "localhost")
       .withHttpApp(httpApp)
       .serve
       .compile
