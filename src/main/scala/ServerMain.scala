@@ -13,7 +13,12 @@ import cats.syntax.all._
 import org.odftoolkit.simple.TextDocument
 import sttp.capabilities.fs2.Fs2Streams
 import fs2.io.file.{Files, Path}
+import org.http4s.headers.`Content-Disposition`
+import org.typelevel.ci.CIString
+import sttp.tapir.server.ServerEndpoint
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import scala.jdk.CollectionConverters._
 import java.nio.file.{Paths, StandardOpenOption}
 
@@ -21,32 +26,53 @@ object ServerMain extends IOApp {
 
   case class InputData(file: Stream[IO, Byte])
 
-  def countCharacters(s: String): IO[Either[Unit, Int]] = {
-    IO.println(s)
-    IO.pure(Right[Unit, Int](s.length))
-  }
+  val staticFileEndpoint: ServerEndpoint[Any, IO] =
+    staticFilesGetServerEndpoint("static")("/tmp/fileFiller/img")
 
-  val countCharactersEndpoint: PublicEndpoint[String, Unit, Int, Any] =
-    endpoint.get.in("test").in(path[String]("number")).out(plainBody[Int])
+  val fileRoutes: HttpRoutes[IO] = Http4sServerInterpreter[IO]().toRoutes(staticFileEndpoint)
+
+
+  val countCharactersEndpoint: Endpoint[Unit, Unit, Unit, String, Any] =
+    endpoint.get.in("healthCheck").out(plainBody[String])
 
   val countCharactersRoutes: HttpRoutes[IO] =
-    Http4sServerInterpreter[IO]().toRoutes(countCharactersEndpoint.serverLogic(number => {
-      countCharacters(number)
+    Http4sServerInterpreter[IO]().toRoutes(countCharactersEndpoint.serverLogic(_ => {
+      IO("Да живой я, блять, живой!".asRight[Unit])
     }))
 
+  val loveEndpoint =
+    endpoint.get.in("whatIsLove").out(htmlBodyUtf8)
 
+  val loveRoute = Http4sServerInterpreter[IO]().toRoutes(loveEndpoint.serverLogic{ _ =>
+    IO((
+      """<!DOCTYPE html>
+        |<html lang="en">
+        |<head>
+        |    <meta charset="UTF-8">
+        |    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        |    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        |    <title>Local Image Page</title>
+        |</head>
+        |<body>
+        |    <h1>This is love:</h1>
+        |    <img src="static/love.png" alt="Local Image"/>
+        |</body>
+        |</html>
+        |""".stripMargin
+    ).asRight[Unit])
+  })
 
-  val fileEndpoint: Endpoint[Unit, (String, String, Stream[IO, Byte]), Unit, String, Any with Fs2Streams[IO]] =
+  val fileEndpoint =
     endpoint.post
-      .in(path[String]("name") / path[String]("animal"))
+      .in(path[String]("name").example("Макс") / path[String]("animal").example("Обезьяна"))
       .in(streamBinaryBody(Fs2Streams[IO])(CodecFormat.OctetStream()))
-      .out(plainBody[String])
+      .out(streamBinaryBody(Fs2Streams[IO])(CodecFormat.OctetStream()))
 
   val fileRout: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]().toRoutes(fileEndpoint.serverLogic {
       case (name, animal, file) => {
-        val inputFile = "/home/azdrogov/template.odt"
-        val outputFile = "/home/azdrogov/output.odt"
+        val inputFile = "/tmp/fileFiller/template.odt"
+        val outputFile = "/tmp/fileFiller/output.odt"
         val variables = Map("{{name}}" -> name, "{{animal}}" -> animal)
 
         file.through(Files[IO].writeAll(Path(inputFile))).compile.drain.unsafeRunSync
@@ -67,23 +93,23 @@ object ServerMain extends IOApp {
 
         textDocument.save(outputFile)
 
-
-        val res: IO[Either[Unit, String]] = IO.pure(Right[Unit, String]("Done"))
-        res
+        IO(Files[IO].readAll(Path(outputFile)).asRight[Unit])
       }
-    })
+    }).map(r => Response(
+      headers = Headers(`Content-Disposition`("attachment", Map(CIString("filename") -> Some(s"${URLEncoder.encode("aaa", StandardCharsets.UTF_8.toString)}.odt").getOrElse(""))))
+    ).withBodyStream(r.body))
 
 
 
 
-  val myEndpoints: List[AnyEndpoint] = List(countCharactersEndpoint, fileEndpoint)
+  val myEndpoints: List[AnyEndpoint] = List(countCharactersEndpoint, fileEndpoint, loveEndpoint)
 
   // first interpret as swagger ui endpoints, backend by the appropriate yaml
   val swaggerEndpoints = SwaggerInterpreter().fromEndpoints[IO](myEndpoints, "My App", "1.0")
   val swaggerRoutes = Http4sServerInterpreter[IO]().toRoutes(swaggerEndpoints)
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val httpApp = (countCharactersRoutes <+> fileRout <+> swaggerRoutes).orNotFound
+    val httpApp = (countCharactersRoutes <+> fileRout <+> loveRoute <+> fileRoutes <+> swaggerRoutes).orNotFound
 
     BlazeServerBuilder[IO]
       .bindHttp(8080, "localhost")
